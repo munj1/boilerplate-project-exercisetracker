@@ -1,122 +1,124 @@
-const express = require("express");
-const app = express();
-const cors = require("cors");
 require("dotenv").config();
-
 const bodyParser = require("body-parser");
-app.use(bodyParser.urlencoded({ extended: false }));
-
-app.use(cors());
-app.use(express.static("public"));
-app.get("/", (req, res) => {
-  res.sendFile(__dirname + "/views/index.html");
-});
-
-// initialize mongoDB
 const mongoose = require("mongoose");
-mongoose
-  .connect(process.env.MONGO_URI, {})
-  .then(() => console.log("Connected to MongoDB"))
-  .catch((err) => console.log(err));
+const express = require("express");
+const cors = require("cors");
+const app = express();
 
-// create user schema
+const port = process.env.PORT || 3000;
+mongoose.connect(process.env.MONGO_URI);
+
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true },
 });
 const User = mongoose.model("User", userSchema);
 
-// create exercise schema
-const exerciseSchema = new mongoose.Schema({
-  username: { type: String, required: true },
-  userId: { type: String, required: true },
-  description: { type: String, required: true },
-  duration: { type: Number, required: true },
+const logSchema = new mongoose.Schema({
+  userid: String,
+  username: String,
+  description: String,
+  duration: Number,
   date: { type: Date, default: Date.now },
 });
-const Exercise = mongoose.model("Exercise", exerciseSchema);
+const Log = mongoose.model("Log", logSchema);
 
-app.post("/api/users", (req, res) => {
-  const { username } = req.body;
-  const newUser = new User({ username });
-  newUser.save((err, data) => {
-    if (err) return console.log(err);
-    res.json({ username: data.username, _id: data._id });
-    console.log("New user added", data);
-  });
+app.use(cors());
+app.use(express.static("public"));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+app.get("/", (req, res) => {
+  res.sendFile(__dirname + "/views/index.html");
 });
 
-app.get("/api/users", (req, res) => {
-  User.find({}, (err, data) => {
-    if (err) return console.log(err);
-    const userList = data.map((item) => ({
-      _id: item._id,
-      username: item.username,
-    }));
-    res.json(userList);
-  });
+app.post("/api/users", async (req, res) => {
+  let newUsername = req.body.username;
+  if (newUsername) {
+    let newUser = new User({
+      username: newUsername,
+    });
+    try {
+      await newUser.save();
+      res.json({
+        username: newUser.username,
+        _id: newUser._id,
+      });
+    } catch (error) {
+      res.json({ error: error.message });
+    }
+  } else {
+    return console.log("Invalid Username");
+  }
+});
+
+app.get("/api/users", async (req, res) => {
+  try {
+    let allUsers = await User.find({});
+    res.json(allUsers);
+  } catch (error) {
+    res.json({ error: error.message });
+  }
 });
 
 app.post("/api/users/:_id/exercises", async (req, res) => {
-  // body => description, duration, date, _id
-  const { description, duration, date } = req.body;
-  const { _id: userId } = req.params;
-
+  const id = req.params._id;
   try {
-    const user = await User.findById(userId);
-    const username = user.username;
+    const currentUser = await User.findById(id);
+    if (!currentUser) {
+      res.end("User not found");
+    }
 
-    // parse date time, format to date string
-    let dateObj = new Date(date);
-    if (dateObj == "Invalid Date") dateObj = new Date();
-    const dateStr = dateObj.toDateString();
-
-    const newExercise = new Exercise({
-      username,
-      userId,
-      description,
-      duration,
-      date: dateStr,
+    const newLog = new Log({
+      userid: id,
+      username: currentUser.username,
+      description: req.body.description,
+      duration: Number(req.body.duration),
+      date: req.body.date
+        ? new Date(req.body.date).toDateString()
+        : new Date().toDateString(),
     });
 
-    await newExercise.save();
+    await newLog.save();
+
     res.json({
-      username,
-      description: newExercise.description,
-      duration: newExercise.duration,
-      date: newExercise.date.toDateString(),
-      _id: userId,
+      username: newLog.username,
+      description: newLog.description,
+      duration: newLog.duration,
+      date: newLog.date.toDateString(),
+      _id: id,
     });
-  } catch (err) {
-    console.log("error occured in post request (exercise)", err);
-    res.json({ error: err.message });
+  } catch (error) {
+    res.json({ error: error.message });
   }
 });
 
 app.get("/api/users/:_id/logs", async (req, res) => {
-  const { _id: userId } = req.params;
-  const user = await User.findById(userId);
+  const id = req.params._id;
+  const currentUser = await User.findById(id);
   const limit = Number(req.query.limit) || 0;
   const from = req.query.from || new Date(0);
   const to = req.query.to || new Date(Date.now());
 
-  const currentLog = await Exercise.find({
-    userId,
+  const currentLog = await Log.find({
+    userid: id,
     date: { $gte: from, $lte: to },
   })
-    .select("-_id -userid -__v -username")
+    .select("-_id -userid -__v")
     .limit(limit);
 
-  console.lop("userLog", userLog);
-
-  res.json({
-    _id: userId,
-    username: user.username,
-    count: currentLog.length,
-    log: currentLog.map((item) => ({
+  let userLog = currentLog.map((item) => {
+    return {
       description: item.description,
       duration: item.duration,
       date: item.date.toDateString(),
-    })),
+    };
+  });
+
+  res.json({
+    _id: id,
+    username: currentUser.username,
+    count: currentLog.length,
+    log: userLog,
   });
 });
 
