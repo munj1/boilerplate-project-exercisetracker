@@ -110,7 +110,8 @@ app.get("/api/users/:_id/logs", async (req, res) => {
     return {
       description: item.description,
       duration: item.duration,
-      date: item.date.toDateString(),
+      //
+      date: item.date.toLocaleDateString(),
     };
   });
 
