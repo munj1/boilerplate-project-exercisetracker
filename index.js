@@ -85,11 +85,11 @@ app.post("/api/users/:_id/exercises", async (req, res) => {
     newExercise.save((err, data) => {
       if (err) return console.log(err);
       res.json({
-        _id: data.userId,
         username: data.username,
-        date: data.date,
-        duration: data.duration,
         description: data.description,
+        duration: data.duration,
+        date: data.date,
+        _id: data.userId,
       });
       console.log("New exercise added", data);
     });
@@ -108,12 +108,12 @@ app.get("/api/users/:_id/logs", (req, res) => {
     let result = exercises;
     if (from) {
       result = result.filter((exercise) => {
-        return new Date(exercise.dateStr) >= new Date(from);
+        return new Date(exercise.date) >= new Date(from);
       });
     }
     if (to) {
       result = result.filter((exercise) => {
-        return new Date(exercise.dateStr) <= new Date(to);
+        return new Date(exercise.date) <= new Date(to);
       });
     }
     if (limit) {
