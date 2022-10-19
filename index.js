@@ -106,19 +106,17 @@ app.get("/api/users/:_id/logs", async (req, res) => {
     .select("-_id -userid -__v -username")
     .limit(limit);
 
-  let userLog = currentLog.map((item) => {
-    return {
-      description: item.description,
-      duration: item.duration,
-      date: item.date.toDateString(),
-    };
-  });
+  console.lop("userLog", userLog);
 
   res.json({
     _id: userId,
     username: user.username,
     count: currentLog.length,
-    log: userLog,
+    log: currentLog.map((item) => ({
+      description: item.description,
+      duration: item.duration,
+      date: item.date.toDateString(),
+    })),
   });
 });
 
