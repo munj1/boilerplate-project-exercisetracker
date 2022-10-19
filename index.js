@@ -31,7 +31,7 @@ const exerciseSchema = new mongoose.Schema({
   userId: { type: String, required: true },
   description: { type: String, required: true },
   duration: { type: Number, required: true },
-  date: { type: String, required: true },
+  date: { type: Date, default: Date.now },
 });
 const Exercise = mongoose.model("Exercise", exerciseSchema);
 
@@ -58,16 +58,12 @@ app.get("/api/users", (req, res) => {
 
 app.post("/api/users/:_id/exercises", async (req, res) => {
   // body => description, duration, date, _id
-  const { description, duration, date, ":_id": userId } = req.body;
+  const { description, duration, date } = req.body;
+  const { _id: userId } = req.params;
 
-  User.findById(userId, (err, user) => {
-    if (err)
-      return res.send(
-        "Unknown userId (error occured during connecting mongoDB)"
-      );
-    if (!user) return res.send("Unknown userId");
-
-    username = user.username;
+  try {
+    const user = await User.findById(userId);
+    const username = user.username;
 
     // parse date time, format to date string
     let dateObj = new Date(date);
@@ -82,55 +78,47 @@ app.post("/api/users/:_id/exercises", async (req, res) => {
       date: dateStr,
     });
 
-    newExercise.save((err, data) => {
-      if (err) return console.log(err);
-      res.json({
-        username: data.username,
-        description: data.description,
-        duration: data.duration,
-        date: data.date,
-        _id: data.userId,
-      });
-      console.log("New exercise added", data);
+    await newExercise.save();
+    res.json({
+      username,
+      description: newExercise.description,
+      duration: newExercise.duration,
+      date: newExercise.date.toDateString(),
+      _id: userId,
     });
-  });
+  } catch (err) {
+    console.log("error occured in post request (exercise)", err);
+    res.json({ error: err.message });
+  }
 });
 
-app.get("/api/users/:_id/logs", (req, res) => {
+app.get("/api/users/:_id/logs", async (req, res) => {
   const { _id: userId } = req.params;
-  // query => from, to, limit
-  const { from, to, limit } = req.query;
+  const user = await User.findById(userId);
+  const limit = Number(req.query.limit) || 0;
+  const from = req.query.from || new Date(0);
+  const to = req.query.to || new Date(Date.now());
 
-  // query data from MongoDB (exercise collection)
-  Exercise.find({ userId }, (err, exercises) => {
-    if (err) return console.log(err);
-    // filter data by from, to, limit
-    let result = exercises;
-    if (from) {
-      result = result.filter((exercise) => {
-        return new Date(exercise.date) >= new Date(from);
-      });
-    }
-    if (to) {
-      result = result.filter((exercise) => {
-        return new Date(exercise.date) <= new Date(to);
-      });
-    }
-    if (limit) {
-      result = result.slice(0, limit);
-    }
+  const currentLog = await Exercise.find({
+    userId,
+    date: { $gte: from, $lte: to },
+  })
+    .select("-_id -userid -__v -username")
+    .limit(limit);
 
-    // return data
-    res.json({
-      username: exercises[0].username,
-      count: result.length,
-      _id: userId,
-      log: exercises.map((exercise) => ({
-        description: exercise.description,
-        duration: exercise.duration,
-        date: exercise.date,
-      })),
-    });
+  let userLog = currentLog.map((item) => {
+    return {
+      description: item.description,
+      duration: item.duration,
+      date: item.date.toDateString(),
+    };
+  });
+
+  res.json({
+    _id: userId,
+    username: user.username,
+    count: currentLog.length,
+    log: userLog,
   });
 });
 
