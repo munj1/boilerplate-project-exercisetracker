@@ -45,6 +45,17 @@ app.post("/api/users", (req, res) => {
   });
 });
 
+app.get("/api/users", (req, res) => {
+  User.find({}, (err, data) => {
+    if (err) return console.log(err);
+    const userList = data.map((item) => ({
+      _id: item._id,
+      username: item.username,
+    }));
+    res.json(userList);
+  });
+});
+
 app.post("/api/users/:_id/exercises", async (req, res) => {
   // body => description, duration, date, _id
   const { description, duration, date, ":_id": userId } = req.body;
@@ -74,11 +85,11 @@ app.post("/api/users/:_id/exercises", async (req, res) => {
     newExercise.save((err, data) => {
       if (err) return console.log(err);
       res.json({
-        username: data.username,
-        description: data.description,
-        duration: data.duration,
-        date: data.date,
         _id: data.userId,
+        username: data.username,
+        date: data.date,
+        duration: data.duration,
+        description: data.description,
       });
       console.log("New exercise added", data);
     });
