@@ -58,7 +58,7 @@ app.get("/api/users", (req, res) => {
   });
 });
 
-// Add exercise
+// Add exercise bb
 app.post("/api/users/:_id/exercises", (req, res) => {
   try {
     const userId = req.params._id;
